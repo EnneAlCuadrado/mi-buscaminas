@@ -26,6 +26,7 @@ function App() {
   const [refreshLeaderboard, setRefreshLeaderboard] = useState(0);
   const [highlightedCells, setHighlightedCells] = useState([]);
   const [losingCell, setLosingCell] = useState(null); // {r, c} for shockwave epicenter
+  const [isMuted, setIsMuted] = useState(false);
 
   const timerRef = useRef(null);
 
@@ -194,6 +195,9 @@ function App() {
               <button onClick={() => setShowLeaderboard(!showLeaderboard)}>
                 {showLeaderboard ? 'Ocultar' : 'Ver'} Récords
               </button>
+              <button onClick={() => setIsMuted(!isMuted)} style={{ fontSize: '1.2rem', padding: '5px 10px' }}>
+                {isMuted ? '🔇' : '🔊'}
+              </button>
             </div>
 
             <Board
@@ -235,7 +239,7 @@ function App() {
             else if (gameStatus === 'lost') audioPhase = 'lost';
             else if (gameStatus === 'playing' && timerActive) audioPhase = 'music_off';
 
-            return <SoundManager audioPhase={audioPhase} />;
+            return <SoundManager audioPhase={audioPhase} isMuted={isMuted} />;
           })()}
         </>
       )}

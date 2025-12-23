@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, memo } from 'react';
 
-const SoundManager = memo(({ audioPhase }) => {
+const SoundManager = memo(({ audioPhase, isMuted }) => {
     const bgAudioRef = useRef(null);
     const winAudioRef = useRef(null);
     const loseAudioRef = useRef(null);
@@ -8,22 +8,23 @@ const SoundManager = memo(({ audioPhase }) => {
 
     // Keep track of current phase for event listeners without triggering re-renders
     const audioPhaseRef = useRef(audioPhase);
+    const isMutedRef = useRef(isMuted);
 
     // Track if we have successfully started the background music at least once
     const [hasStartedMusic, setHasStartedMusic] = useState(false);
     const MAX_VOLUME = 0.5;
 
-    // Update ref whenever prop changes
+    // Update refs whenever props change
     useEffect(() => {
         audioPhaseRef.current = audioPhase;
-    }, [audioPhase]);
+        isMutedRef.current = isMuted;
+    }, [audioPhase, isMuted]);
 
     // Helper: Fade In
     const fadeIn = (audio) => {
-        if (!audio) return;
+        if (!audio || isMutedRef.current) return;
 
         // Strict Guard: If we are NOT in music_on phase, do NOT start playing.
-        // This prevents race conditions where a delayed play attempt resolves during gameplay.
         if (audioPhaseRef.current !== 'music_on') return;
 
         // Stop any ongoing fade-out
@@ -44,9 +45,10 @@ const SoundManager = memo(({ audioPhase }) => {
 
         // Ramp volume up to MAX_VOLUME
         fadeInterval.current = setInterval(() => {
-            // Re-check phase inside interval to abort if game started mid-fade
-            if (audioPhaseRef.current !== 'music_on') {
+            // Re-check phase AND mute inside interval
+            if (audioPhaseRef.current !== 'music_on' || isMutedRef.current) {
                 clearInterval(fadeInterval.current);
+                if (isMutedRef.current) audio.pause();
                 return;
             }
 
@@ -79,6 +81,7 @@ const SoundManager = memo(({ audioPhase }) => {
     // 1. Global Interaction Listener (Autoplay Unlocker)
     useEffect(() => {
         const handleInteraction = () => {
+            if (isMutedRef.current) return;
             // RULE: If game is playing (music_off), IGNORE interactions.
             if (audioPhaseRef.current === 'music_off') return;
 
@@ -95,7 +98,6 @@ const SoundManager = memo(({ audioPhase }) => {
         if (!hasStartedMusic) {
             window.addEventListener('click', handleInteraction);
             window.addEventListener('keydown', handleInteraction);
-            // Including mousemove just in case, though click is usually sufficient
             window.addEventListener('mousemove', handleInteraction);
         }
 
@@ -104,12 +106,33 @@ const SoundManager = memo(({ audioPhase }) => {
             window.removeEventListener('keydown', handleInteraction);
             window.removeEventListener('mousemove', handleInteraction);
         };
-    }, [hasStartedMusic]); // Re-bind (or unbind) when success state changes
+    }, [hasStartedMusic]);
 
-    // 2. State-Based Control
+    // 2. Control Logic
     useEffect(() => {
         if (!bgAudioRef.current) return;
 
+        // If Muted, stop everything immediately
+        if (isMuted) {
+            if (fadeInterval.current) clearInterval(fadeInterval.current);
+
+            // Stop BG Music
+            bgAudioRef.current.pause();
+            bgAudioRef.current.currentTime = 0; // Optional: logic could differ if we want to resume
+
+            // Stop SFX
+            if (winAudioRef.current) {
+                winAudioRef.current.pause();
+                winAudioRef.current.currentTime = 0;
+            }
+            if (loseAudioRef.current) {
+                loseAudioRef.current.pause();
+                loseAudioRef.current.currentTime = 0;
+            }
+            return;
+        }
+
+        // If Unmuted or Phase Changed, react accordingly
         if (audioPhase === 'music_on') {
             fadeIn(bgAudioRef.current);
         }
@@ -134,7 +157,7 @@ const SoundManager = memo(({ audioPhase }) => {
                 loseAudioRef.current.play().catch(() => { });
             }
         }
-    }, [audioPhase]);
+    }, [audioPhase, isMuted]);
 
     return (
         <div style={{ display: 'none' }}>
