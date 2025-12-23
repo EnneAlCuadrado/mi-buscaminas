@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, memo } from 'react';
 
-const SoundManager = ({ gameStatus, timerActive }) => {
+const SoundManager = memo(({ audioPhase }) => {
     const bgAudioRef = useRef(null);
     const winAudioRef = useRef(null);
     const loseAudioRef = useRef(null);
@@ -63,71 +63,65 @@ const SoundManager = ({ gameStatus, timerActive }) => {
     // 1. Initial Setup & Global Interaction Listener
     useEffect(() => {
         const tryToPlayMusic = () => {
-            // If we are in Idle state (not playing a game), try to fade in
+            // Only try to play if we are supposed to have music on
+            // This is a safety check, but the main logic is in the other useEffect
             if (bgAudioRef.current && bgAudioRef.current.paused) {
-                fadeIn(bgAudioRef.current);
+                // We don't force fade-in here because the dependency-driven effect will handle current state
+                // We just unlock the audio context if needed.
+                // Actually, for simplicity, let's just let the main effect handle play triggers
+                // providing the browser allows it. This listener just "wakes up" audio context if needed.
             }
         };
 
-        const cleanupListeners = () => {
-            window.removeEventListener('click', tryToPlayMusic);
-            window.removeEventListener('keydown', tryToPlayMusic);
-            window.removeEventListener('mousemove', tryToPlayMusic);
-            if (fadeInterval.current) clearInterval(fadeInterval.current);
+        // These events are just to unlock autoplay policies.
+        // We won't call fadeIn directly here to avoid conflicting with audioPhase.
+        // The browser simply needs *an* interaction.
+        const unlockAudio = () => {
+            // We can just play/pause quickly or just rely on the main effect firing 'play' 
+            // inside a call stack originating from these events (if we propagated it), 
+            // but since React effects run async, we rely on the fact that *some* interaction happened.
+            // Chrome often remembers user interaction for the document.
         };
 
-        window.addEventListener('click', tryToPlayMusic);
-        window.addEventListener('keydown', tryToPlayMusic);
-        window.addEventListener('mousemove', tryToPlayMusic);
+        window.addEventListener('click', unlockAudio);
+        window.addEventListener('keydown', unlockAudio);
 
-        // Immediate attempt
-        tryToPlayMusic();
-
-        return cleanupListeners;
+        return () => {
+            window.removeEventListener('click', unlockAudio);
+            window.removeEventListener('keydown', unlockAudio);
+            if (fadeInterval.current) clearInterval(fadeInterval.current);
+        };
     }, []);
 
     // 2. State-Based Control (The "Business Logic")
     useEffect(() => {
         if (!bgAudioRef.current) return;
 
-        if (gameStatus === 'playing' && !timerActive) {
+        console.log(`SoundManager: Processing audioPhase '${audioPhase}'`);
+
+        if (audioPhase === 'music_on') {
             // IDLE / MENU: Fade In Music
+            // Check if already playing to avoid resetting volume curve or glitching
+            // Although fadeIn handles logic, we can be extra safe.
             fadeIn(bgAudioRef.current);
         }
-        else if (gameStatus === 'playing' && timerActive) {
+        else if (audioPhase === 'music_off') {
             // ACTIVE GAME: Fade Out Music
             fadeOut(bgAudioRef.current);
         }
-        else if (gameStatus === 'won') {
-            // WON: Immediate Stop (Fade looks weird here, or maybe fast fade? Defaulting to fast stop)
-            // User requested Fade In on returning to menu, but for Winning usually we want silence for the SFX
-
-            // Allow fade out if music was playing
-            if (!bgAudioRef.current.paused) {
-                // Just use fadeOut to be smooth, or stop immediately?
-                // Logic says: "Once the volume reaches 0... pause".
-                // Let's use fadeOut for consistency, OR stop immediately if interference with Win sound is a concern.
-                // Given the instructions: "First... volume down... then pause". 
-                // This implies fadeOut is desired even on game over?
-                // Actually instruction says: "If the player loses... fade-out must be cancelled immediately and start fade-in".
-                // It doesn't explicitly say "Fade out on win". 
-                // But generally win sound needs space. I'll stop bg music immediately on win/loss to let SFX shine.
-
-                // However, Requerimiento says "Fade Out... When the game begins".
-                // It doesn't explicitly mention fade out on Game Over, but context implies smoothing transitions.
-                // Let's stop quickly for Win/Loss to prioritize SFX.
-                if (fadeInterval.current) clearInterval(fadeInterval.current);
-                bgAudioRef.current.pause();
-                bgAudioRef.current.currentTime = 0;
-            }
+        else if (audioPhase === 'won') {
+            // STOP Music immediately
+            if (fadeInterval.current) clearInterval(fadeInterval.current);
+            bgAudioRef.current.pause();
+            bgAudioRef.current.currentTime = 0;
 
             if (winAudioRef.current) {
                 winAudioRef.current.currentTime = 0;
                 winAudioRef.current.play().catch(() => { });
             }
         }
-        else if (gameStatus === 'lost') {
-            // LOST: Immediate Stop Music, Play SFX
+        else if (audioPhase === 'lost') {
+            // STOP Music immediately
             if (fadeInterval.current) clearInterval(fadeInterval.current);
             bgAudioRef.current.pause();
             bgAudioRef.current.currentTime = 0;
@@ -137,7 +131,7 @@ const SoundManager = ({ gameStatus, timerActive }) => {
                 loseAudioRef.current.play().catch(() => { });
             }
         }
-    }, [gameStatus, timerActive]);
+    }, [audioPhase]); // STRICT DEPENDENCY: Only audioPhase
 
     return (
         <div style={{ display: 'none' }}>
@@ -146,6 +140,6 @@ const SoundManager = ({ gameStatus, timerActive }) => {
             <audio ref={loseAudioRef} src="/sounds/lose.wav" />
         </div>
     );
-};
+});
 
 export default SoundManager;

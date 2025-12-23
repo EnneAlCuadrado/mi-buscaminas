@@ -228,7 +228,15 @@ function App() {
             </div>
           )}
 
-          <SoundManager gameStatus={gameStatus} timerActive={timerActive} />
+          {/* Audio Logic Derived State */}
+          {(() => {
+            let audioPhase = 'music_on'; // default for menu/idle
+            if (gameStatus === 'won') audioPhase = 'won';
+            else if (gameStatus === 'lost') audioPhase = 'lost';
+            else if (gameStatus === 'playing' && timerActive) audioPhase = 'music_off';
+
+            return <SoundManager audioPhase={audioPhase} />;
+          })()}
         </>
       )}
     </div>
