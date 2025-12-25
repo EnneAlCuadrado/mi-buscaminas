@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { createBoard, revealCell, toggleFlag, handleChording } from './utils/gameLogic';
+import { createBoard, revealCell, toggleFlag, handleChording, placeMines } from './utils/gameLogic';
 import Board from './components/Board';
 import Leaderboard from './components/Leaderboard';
 import DifficultySelector from './components/DifficultySelector';
@@ -27,6 +27,7 @@ function App() {
   const [highlightedCells, setHighlightedCells] = useState([]);
   const [losingCell, setLosingCell] = useState(null); // {r, c} for shockwave epicenter
   const [isMuted, setIsMuted] = useState(false);
+  const [minesPlaced, setMinesPlaced] = useState(false);
 
   const timerRef = useRef(null);
 
@@ -46,15 +47,30 @@ function App() {
     return () => clearInterval(timerRef.current);
   }, [timerActive]);
 
+  // Handle 'R' key for reset
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Only reset if game is ready and 'r' (or 'R') is pressed
+      if (isGameReady && e.key.toLowerCase() === 'r') {
+        startNewGame();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isGameReady, difficulty]); // Depend on difficulty because startNewGame uses it
+
+
   const startNewGame = () => {
     const config = DIFFICULTY_CONFIG[difficulty];
-    const newBoard = createBoard(config.rows, config.cols, config.mines);
+    const newBoard = createBoard(config.rows, config.cols);
     setBoard(newBoard);
     setGameStatus('playing');
     setTime(0);
     setLosingCell(null);
     setTimerActive(false);
     setShowWinModal(false);
+    setMinesPlaced(false);
   };
 
   // derived state for HUD
@@ -75,7 +91,15 @@ function App() {
       result = handleChording(board, r, c);
     } else {
       // Normal reveal
-      result = revealCell(board, r, c);
+      let currentBoard = board;
+      if (!minesPlaced) {
+        currentBoard = placeMines(board, DIFFICULTY_CONFIG[difficulty].mines, r, c);
+        setMinesPlaced(true);
+        // Important: update local 'board' reference so revealCell uses the mined board
+        setBoard(currentBoard); // Sync state for next render, but use var for now
+      }
+
+      result = revealCell(currentBoard, r, c);
     }
 
     const { board: newBoard, status, neighborsToHighlight } = result;

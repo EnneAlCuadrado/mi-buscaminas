@@ -6,7 +6,7 @@ const DIRECTIONS = [
     [1, -1], [1, 0], [1, 1]
 ];
 
-export const createBoard = (rows, cols, mines) => {
+export const createBoard = (rows, cols) => {
     // Initialize empty board
     const board = Array.from({ length: rows }, (_, r) =>
         Array.from({ length: cols }, (_, c) => ({
@@ -18,13 +18,25 @@ export const createBoard = (rows, cols, mines) => {
             neighborMines: 0
         }))
     );
+    return board;
+};
 
-    // Place mines
+export const placeMines = (initialBoard, mines, avoidRow, avoidCol) => {
+    const rows = initialBoard.length;
+    const cols = initialBoard[0].length;
+    // Deep copy to avoid mutation
+    const board = initialBoard.map(r => r.map(c => ({ ...c })));
+
     let minesPlaced = 0;
     while (minesPlaced < mines) {
         const r = Math.floor(Math.random() * rows);
         const c = Math.floor(Math.random() * cols);
-        if (!board[r][c].isMine) {
+
+        // Avoid placing mine on the specific cell (first click) and already mined cells
+        // Optionally prevent mines on neighbors strictly too? Classic Minesweeper usually guarantees an opening (0), 
+        // effectively 1-radius safe zone.
+        // For now, let's just strictly avoid the clicked cell to prevent instant loss.
+        if ((r !== avoidRow || c !== avoidCol) && !board[r][c].isMine) {
             board[r][c].isMine = true;
             minesPlaced++;
         }
