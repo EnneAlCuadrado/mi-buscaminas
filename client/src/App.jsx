@@ -47,21 +47,7 @@ function App() {
     return () => clearInterval(timerRef.current);
   }, [timerActive]);
 
-  // Handle 'R' key for reset
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      // Only reset if game is ready and 'r' (or 'R') is pressed
-      if (isGameReady && e.key.toLowerCase() === 'r') {
-        startNewGame();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isGameReady, difficulty]); // Depend on difficulty because startNewGame uses it
-
-
-  const startNewGame = () => {
+  const startNewGame = React.useCallback(() => {
     const config = DIFFICULTY_CONFIG[difficulty];
     const newBoard = createBoard(config.rows, config.cols);
     setBoard(newBoard);
@@ -71,7 +57,21 @@ function App() {
     setTimerActive(false);
     setShowWinModal(false);
     setMinesPlaced(false);
-  };
+  }, [difficulty]);
+
+  // Handle 'R' key for reset
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Only reset if game is ready and 'r' (or 'R') is pressed
+      if (isGameReady && e.key.toLowerCase() === 'r') {
+        console.log("R key pressed, resetting...");
+        startNewGame();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isGameReady, startNewGame]);
 
   // derived state for HUD
   const flaggedCount = board.flat().filter(c => c.isFlagged).length;
